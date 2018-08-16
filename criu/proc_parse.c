@@ -585,8 +585,8 @@ static int handle_vma(pid_t pid, struct vma_area *vma_area,
 		else if (S_ISCHR(st_buf->st_mode) && (st_buf->st_rdev == DEVZERO))
 			/* devzero mapping -- also makes sense */;
 		else {
-			pr_err("Can't handle non-regular mapping on %d's map %"PRIx64"\n", pid, vma_area->e->start);
-			goto err;
+			pr_warn("Can't handle non-regular mapping on %d's map %"PRIx64"\n", pid, vma_area->e->start);
+			return 1;
 		}
 
 		/*
@@ -657,7 +657,7 @@ static int vma_list_add(struct vma_area *vma_area,
 			struct vma_file_info *vfi, struct vma_file_info *prev_vfi)
 {
 	if (vma_area->e->status & VMA_UNSUPP) {
-		pr_err("Unsupported mapping found %016"PRIx64"-%016"PRIx64"\n",
+		pr_warn("Unsupported mapping found %016"PRIx64"-%016"PRIx64"\n",
 					vma_area->e->start, vma_area->e->end);
 		return -1;
 	}
@@ -766,10 +766,13 @@ int parse_smaps(pid_t pid, struct vm_area_list *vma_area_list,
 				continue;
 		}
 
-		if (vma_area && vma_list_add(vma_area, vma_area_list,
-						&prev_end, &vfi, &prev_vfi))
-			goto err;
+		int not_added_to_list = vma_area && vma_list_add(vma_area, vma_area_list,
+						&prev_end, &vfi, &prev_vfi);
 
+		if (not_added_to_list) {
+			printf("%s\n", str);
+			break;
+		}
 		if (eof)
 			break;
 
@@ -784,6 +787,7 @@ int parse_smaps(pid_t pid, struct vm_area_list *vma_area_list,
 			pr_err("Can't parse: %s\n", str);
 			goto err;
 		}
+        // if not_added_to_list, check that vfi.dev_maj:vfi.dev_min is actually GPU
 
 		vma_area->e->start	= start;
 		vma_area->e->end	= end;
@@ -809,8 +813,12 @@ int parse_smaps(pid_t pid, struct vm_area_list *vma_area_list,
 			goto err;
 		}
 
-		if (handle_vma(pid, vma_area, str + path_off, map_files_dir,
-				&vfi, &prev_vfi, &vm_file_fd))
+		int handle_vma_ret = handle_vma(pid, vma_area, str + path_off, map_files_dir,
+				&vfi, &prev_vfi, &vm_file_fd);
+		if (handle_vma_ret == 1) {
+            printf("device: %x:%x\n", vfi.dev_maj, vfi.dev_min);
+			continue;
+        } else if (handle_vma_ret)
 			goto err;
 
 		if (vma_entry_is(vma_area->e, VMA_FILE_PRIVATE) ||

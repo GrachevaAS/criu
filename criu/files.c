@@ -434,6 +434,7 @@ static const struct fdtype_ops *get_mem_dev_ops(struct fd_parms *p, int minor)
 	return ops;
 }
 
+#include <stdio.h>
 static int dump_chrdev(struct fd_parms *p, int lfd, FdinfoEntry *e)
 {
 	struct fd_link *link_old = p->link;
@@ -461,10 +462,18 @@ static int dump_chrdev(struct fd_parms *p, int lfd, FdinfoEntry *e)
 			ops = &tty_dump_ops;
 			break;
 		}
-
 		sprintf(more, "%d:%d", maj, minor(p->stat.st_rdev));
 		err = dump_unsupp_fd(p, lfd, "chr", more, e);
 		p->link = link_old;
+
+		char buff[128];
+		snprintf(buffer, "/proc/self/fd/%i", lfd);
+		char buff_file[128];
+		readlink(buffer, buff_file, 128);
+		cout << "file on char device: " << buff_file << endl;
+		if (strstr(buff_file, "nvidia")) {
+			return 0;
+		}
 		return err;
 	}
 	}
@@ -502,8 +511,11 @@ static int dump_one_file(struct pid *pid, int fd, int lfd, struct fd_opts *opts,
 	if (S_ISSOCK(p.stat.st_mode))
 		return dump_socket(&p, lfd, e);
 
-	if (S_ISCHR(p.stat.st_mode))
-		return dump_chrdev(&p, lfd, e);
+	if (S_ISCHR(p.stat.st_mode)) {
+		int chrdev_ret = dump_chrdev(&p, lfd, e);
+		printf("chrdev_ret: %i\n", chrdev_ret);
+		return chrdev_ret;
+	}
 
 	if (p.fs_type == ANON_INODE_FS_MAGIC) {
 		char link[32];
@@ -822,8 +834,8 @@ int collect_fd(int pid, FdinfoEntry *e, struct rst_info *rst_info, bool fake)
 
 	fdesc = find_file_desc(e);
 	if (fdesc == NULL) {
-		pr_err("No file for fd %d id %#x\n", e->fd, e->id);
-		return -1;
+		pr_warn("No file for fd %d id %#x\n", e->fd, e->id);
+		return 0;
 	}
 
 	if (!collect_fd_to(pid, e, rst_info, fdesc, fake, false))
