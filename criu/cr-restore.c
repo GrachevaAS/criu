@@ -2168,6 +2168,11 @@ skip_ns_bouncing:
 	if (ret < 0)
 		goto out_kill;
 
+	for_each_pstree_item(item) {
+		if (task_reset_dirty_track(item->pid->real) < 0)
+			goto out_kill;
+	}
+
 	/*
 	 * Zombies die after CR_STATE_RESTORE which is switched
 	 * by root task, not by us. See comment before CR_STATE_FORKING

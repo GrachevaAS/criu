@@ -34,7 +34,7 @@
 #include "protobuf.h"
 #include "images/pagemap.pb-c.h"
 
-static int task_reset_dirty_track(int pid)
+int task_reset_dirty_track(int pid)
 {
 	int ret;
 
@@ -431,7 +431,7 @@ static int __parasite_dump_pages_seized(struct pstree_item *item,
 		else {
 again:
 			ret = generate_iovs(vma_area, pp, map, &off,
-				has_parent && !possible_pid_reuse);
+				has_parent/* && !possible_pid_reuse*/);
 			if (ret == -EAGAIN) {
 				BUG_ON(!(pp->flags & PP_CHUNK_MODE));
 
